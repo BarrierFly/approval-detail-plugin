@@ -55,6 +55,13 @@ async function handleRequest(ctx, req, res) {
     send(405, { ok: false, error: 'POST required' })
     return
   }
+  // A custom header makes a cross-site browser request require a CORS
+  // preflight, which this route does not grant. The Desktop IPC bridge
+  // forwards the header with the authenticated request.
+  if (req.headers['x-dsh-approval-detail'] !== '1') {
+    send(403, { ok: false, error: 'missing request marker' })
+    return
+  }
 
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(new Error('risk analysis timed out')), ANALYSIS_TIMEOUT_MS)

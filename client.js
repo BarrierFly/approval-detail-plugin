@@ -723,7 +723,7 @@ window.__ModuleLoader__.load({
 
         fetch(ANALYZE_ROUTE, {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
+          headers: { 'content-type': 'application/json', 'x-dsh-approval-detail': '1' },
           body: JSON.stringify(payload),
           cache: 'no-store',
           signal: controller.signal,

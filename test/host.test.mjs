@@ -70,6 +70,7 @@ function request(payload, method = 'POST') {
   const body = typeof payload === 'string' ? payload : JSON.stringify(payload)
   const req = Readable.from([Buffer.from(body)])
   req.method = method
+  req.headers = { 'x-dsh-approval-detail': '1' }
   req.destroy = () => {}
   return req
 }
@@ -128,6 +129,15 @@ test('host route fails closed when no default model is composed', async () => {
   const body = JSON.parse(res.body)
   assert.equal(body.ok, false)
   assert.match(body.error, /default model/u)
+})
+
+test('host route rejects a request without the package marker', async () => {
+  const ctx = createContext()
+  const res = new FakeResponse()
+  const req = request({ toolName: 'read', arguments: '{}' })
+  req.headers = {}
+  await routeOf(ctx).handler(req, res)
+  assert.equal(res.status, 403)
 })
 
 test('host route reports invalid JSON without throwing', async () => {
