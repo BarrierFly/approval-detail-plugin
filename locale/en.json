@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Approval Action Detail",
+    "description": "Shows the complete action, a direct explanation, and a model-generated risk analysis when DSH asks for approval."
+  }
+}

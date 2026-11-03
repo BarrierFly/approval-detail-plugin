@@ -1,0 +1,4 @@
+node_modules/
+.asar-extract/
+*.log
+.DS_Store

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Approval action detail icon">
+  <path fill="#3b6fd8" d="M32 4 55 13v17c0 14.2-9.4 24.2-23 30C18.4 54.2 9 44.2 9 30V13L32 4Z"/>
+  <path fill="#fff" d="M32 11.7 48.5 18v12c0 9.9-6.5 17.4-16.5 22.3C22 47.4 15.5 39.9 15.5 30V18L32 11.7Z" opacity=".94"/>
+  <circle cx="32" cy="30" r="7.2" fill="#3b6fd8"/>
+  <circle cx="32" cy="30" r="2.8" fill="#fff"/>
+  <path fill="#3b6fd8" d="M21 44.5h22v3.2H21z"/>
+</svg>

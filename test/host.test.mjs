@@ -1,0 +1,139 @@
+import assert from 'node:assert/strict'
+import { Readable } from 'node:stream'
+import test from 'node:test'
+import { apply } from '../index.js'
+
+function createContext({ llm, selection } = {}) {
+  const routes = new Map()
+  const ctx = {
+    webServer: {
+      routes,
+      register(route) {
+        routes.set(route.path, route)
+        return () => routes.delete(route.path)
+      },
+    },
+    effect(callback) {
+      return callback()
+    },
+    get(name) {
+      if (name === 'llm') return llm
+      if (name === 'agentDefaultModel') return selection === undefined ? undefined : { currentSelection: () => selection }
+      return undefined
+    },
+  }
+  apply(ctx)
+  return ctx
+}
+
+class FakeResponse {
+  constructor() {
+    this.status = 0
+    this.headers = {}
+    this.body = ''
+    this.writableEnded = false
+    this.headersSent = false
+    this.listeners = new Map()
+  }
+
+  on(event, listener) {
+    const list = this.listeners.get(event) ?? []
+    list.push(listener)
+    this.listeners.set(event, list)
+    return this
+  }
+
+  off(event, listener) {
+    const list = this.listeners.get(event) ?? []
+    this.listeners.set(event, list.filter((item) => item !== listener))
+    return this
+  }
+
+  emit(event) {
+    for (const listener of this.listeners.get(event) ?? []) listener()
+  }
+
+  writeHead(status, headers) {
+    this.status = status
+    this.headers = headers
+    this.headersSent = true
+  }
+
+  end(body = '') {
+    this.body = body
+    this.writableEnded = true
+    this.emit('close')
+  }
+}
+
+function request(payload, method = 'POST') {
+  const body = typeof payload === 'string' ? payload : JSON.stringify(payload)
+  const req = Readable.from([Buffer.from(body)])
+  req.method = method
+  req.destroy = () => {}
+  return req
+}
+
+function routeOf(ctx) {
+  const route = ctx.webServer.routes.get('/__dsh-approval-detail/analyze')
+  assert.notEqual(route, undefined)
+  return route
+}
+
+test('host route returns a normalized model risk analysis', async () => {
+  let observed
+  const ctx = createContext({
+    selection: { provider: 'test-provider', model: 'test-model' },
+    llm: {
+      async *stream(options) {
+        observed = options
+        yield { type: 'text-delta', text: '{"level":"high","summary":"Deletes files outside the workspace.","factors":["recursive delete"],"recommendation":"Reject unless the path is verified."}' }
+        yield { type: 'finish', reason: { kind: 'stop' } }
+      },
+    },
+  })
+
+  const res = new FakeResponse()
+  await routeOf(ctx).handler(request({
+    toolName: 'pwsh',
+    arguments: '{"command":"Remove-Item -Recurse C:\\\\temp"}',
+    locale: 'en',
+  }), res)
+
+  assert.equal(res.status, 200)
+  const body = JSON.parse(res.body)
+  assert.equal(body.ok, true)
+  assert.equal(body.analysis.level, 'high')
+  assert.equal(body.analysis.factors[0], 'recursive delete')
+  assert.equal(observed.provider, 'test-provider')
+  assert.equal(observed.model, 'test-model')
+  assert.match(observed.messages[0].content[0].text, /Remove-Item/u)
+})
+
+test('host route rejects non-POST requests', async () => {
+  const ctx = createContext()
+  const res = new FakeResponse()
+  await routeOf(ctx).handler(request({ toolName: 'read' }, 'GET'), res)
+  assert.equal(res.status, 405)
+  assert.equal(JSON.parse(res.body).ok, false)
+})
+
+test('host route fails closed when no default model is composed', async () => {
+  const ctx = createContext({
+    llm: { async *stream() {} },
+  })
+  const res = new FakeResponse()
+  await routeOf(ctx).handler(request({ toolName: 'read', arguments: '{}' }), res)
+  assert.equal(res.status, 502)
+  const body = JSON.parse(res.body)
+  assert.equal(body.ok, false)
+  assert.match(body.error, /default model/u)
+})
+
+test('host route reports invalid JSON without throwing', async () => {
+  const ctx = createContext()
+  const res = new FakeResponse()
+  await routeOf(ctx).handler(request('{not-json'), res)
+  assert.equal(res.status, 400)
+  assert.equal(JSON.parse(res.body).ok, false)
+})
