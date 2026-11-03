@@ -62,6 +62,10 @@ async function handleRequest(ctx, req, res) {
     send(403, { ok: false, error: 'missing request marker' })
     return
   }
+  if (!isLoopback(req)) {
+    send(403, { ok: false, error: 'risk analysis is limited to loopback clients' })
+    return
+  }
 
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(new Error('risk analysis timed out')), ANALYSIS_TIMEOUT_MS)
@@ -103,6 +107,18 @@ async function handleRequest(ctx, req, res) {
     clearTimeout(timer)
     if (typeof res.off === 'function') res.off('close', onClose)
   }
+}
+
+/**
+ * Check that a request arrived over a loopback socket.
+ * @param req - Incoming HTTP request.
+ * @returns Whether the peer is loopback.
+ */
+function isLoopback(req) {
+  const address = req.socket?.remoteAddress ?? ''
+  return address === '::1'
+    || address.startsWith('127.')
+    || address.startsWith('::ffff:127.')
 }
 
 /**

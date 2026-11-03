@@ -71,6 +71,7 @@ function request(payload, method = 'POST') {
   const req = Readable.from([Buffer.from(body)])
   req.method = method
   req.headers = { 'x-dsh-approval-detail': '1' }
+  req.socket = { remoteAddress: '127.0.0.1' }
   req.destroy = () => {}
   return req
 }
@@ -136,6 +137,15 @@ test('host route rejects a request without the package marker', async () => {
   const res = new FakeResponse()
   const req = request({ toolName: 'read', arguments: '{}' })
   req.headers = {}
+  await routeOf(ctx).handler(req, res)
+  assert.equal(res.status, 403)
+})
+
+test('host route rejects a non-loopback peer', async () => {
+  const ctx = createContext()
+  const res = new FakeResponse()
+  const req = request({ toolName: 'read', arguments: '{}' })
+  req.socket = { remoteAddress: '192.0.2.10' }
   await routeOf(ctx).handler(req, res)
   assert.equal(res.status, 403)
 })
