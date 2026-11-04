@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Show the complete action, a direct explanation, and a model-generated risk analysis when DSH asks for approval.",
   "type": "module",
-  "license": "MIT",
+  "license": "WTFPL",
   "private": true,
   "exports": {
     ".": "./index.js",

@@ -92,4 +92,4 @@ node test/client.test.mjs
 
 ## License
 
-MIT。见 [LICENSE](./LICENSE)。
+WTFPL v2（Do What The Fuck You Want To Public License）。见 [LICENSE](./LICENSE)。
