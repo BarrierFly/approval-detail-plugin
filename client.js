@@ -766,7 +766,8 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * Clamp a server analysis to the display contract.
+     * Clamp a server analysis to the display contract and strip any Markdown
+     * the model may still have produced (including cached older responses).
      * @param value - Server analysis.
      * @returns Normalized analysis.
      */
@@ -775,12 +776,46 @@ window.__ModuleLoader__.load({
       const level = ['low', 'medium', 'high', 'critical'].includes(source.level) ? source.level : 'unknown'
       return {
         level,
-        summary: typeof source.summary === 'string' && source.summary.trim() !== '' ? source.summary.trim() : '',
+        summary: typeof source.summary === 'string' ? stripMarkdownText(source.summary) : '',
         factors: Array.isArray(source.factors)
-          ? source.factors.filter((item) => typeof item === 'string' && item.trim() !== '').slice(0, 8).map((item) => item.trim())
+          ? source.factors
+            .filter((item) => typeof item === 'string' && item.trim() !== '')
+            .slice(0, 8)
+            .map((item) => stripMarkdownText(item))
+            .filter((item) => item !== '')
           : [],
-        recommendation: typeof source.recommendation === 'string' ? source.recommendation.trim() : '',
+        recommendation: typeof source.recommendation === 'string' ? stripMarkdownText(source.recommendation) : '',
       }
+    }
+
+    /**
+     * Convert Markdown-looking model text to plain display text while keeping
+     * the actual code content. Mirrors the Host-side normalization.
+     * @param text - Model text or a field value.
+     * @returns Plain text without Markdown markers.
+     */
+    function stripMarkdownText(text) {
+      let value = typeof text === 'string' ? text : ''
+      value = value.replace(/\r\n?/g, '\n')
+      value = value.replace(/^[ \t]{0,3}(`{3,}|~{3,})[^\n]*\n?/gmu, '')
+      value = value.replace(/^[ \t]*(?:powershell|pwsh|ps1|bash|sh|shell|zsh|fish|json|jsonc|javascript|js|typescript|ts|tsx|jsx|python|py|text|plaintext|md|markdown|sql|yaml|yml|xml|html|css)[ \t]*$/gmu, '')
+      for (let pass = 0; pass < 2; pass += 1) {
+        value = value.replace(/(`+)([\s\S]*?)\1/gu, '$2')
+      }
+      value = value.replace(/`+/gu, '')
+      value = value.replace(/\*\*([^*\n]+)\*\*/gu, '$1')
+      value = value.replace(/__([^_\n]+)__/gu, '$1')
+      value = value.replace(/~~([^~\n]+)~~/gu, '$1')
+      value = value.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/gmu, '$1$2')
+      value = value.replace(/(^|[^_])_([^_\n]+)_(?!_)/gmu, '$1$2')
+      value = value.replace(/^[ \t]{0,3}#{1,6}[ \t]+/gmu, '')
+      value = value.replace(/^[ \t]*[-*+][ \t]+/gmu, '')
+      value = value.replace(/^[ \t]*\d+[.)][ \t]+/gmu, '')
+      value = value.replace(/^[ \t]*>[ \t]?/gmu, '')
+      value = value.replace(/!\[([^\]\n]*)\]\(([^)\n]+)\)/gu, '$1 ($2)')
+      value = value.replace(/\[([^\]\n]+)\]\(([^)\n]+)\)/gu, '$1 ($2)')
+      value = value.replace(/^[ \t]*([-*_])(?:[ \t]*\1){2,}[ \t]*$/gmu, '')
+      return value.replace(/\n{3,}/g, '\n\n').trim()
     }
 
     /**

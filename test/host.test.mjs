@@ -112,6 +112,51 @@ test('host route returns a normalized model risk analysis', async () => {
   assert.match(observed.messages[0].content[0].text, /Remove-Item/u)
 })
 
+test('host route strips Markdown from structured fields and fenced JSON', async () => {
+  const ctx = createContext({
+    selection: { provider: 'test-provider', model: 'test-model' },
+    llm: {
+      async *stream() {
+        yield { type: 'text-delta', text: '```json\n{"level":"high","summary":"**Run** `Remove-Item`","factors":["Use `-Force`"],"recommendation":"Do not ```run```"}```\n' }
+        yield { type: 'finish', reason: { kind: 'stop' } }
+      },
+    },
+  })
+
+  const res = new FakeResponse()
+  await routeOf(ctx).handler(request({ toolName: 'pwsh', arguments: '{}', locale: 'en' }), res)
+  const body = JSON.parse(res.body)
+  assert.equal(body.analysis.summary, 'Run Remove-Item')
+  assert.equal(body.analysis.factors[0], 'Use -Force')
+  assert.equal(body.analysis.recommendation, 'Do not run')
+})
+
+test('host route strips Markdown from an unstructured model answer', async () => {
+  const ctx = createContext({
+    selection: { provider: 'test-provider', model: 'test-model' },
+    llm: {
+      async *stream() {
+        yield {
+          type: 'text-delta',
+          text: '**操作分析**\n\n- **工具**：`pwsh`\n- 代码：\n```` ```powershell ````\nGet-ChildItem\n```` ``` ````\n',
+        }
+        yield { type: 'finish', reason: { kind: 'stop' } }
+      },
+    },
+  })
+
+  const res = new FakeResponse()
+  await routeOf(ctx).handler(request({ toolName: 'pwsh', arguments: '{}', locale: 'zh' }), res)
+  const body = JSON.parse(res.body)
+  assert.equal(body.analysis.level, 'unknown')
+  assert.match(body.analysis.summary, /操作分析/u)
+  assert.match(body.analysis.summary, /pwsh/u)
+  assert.match(body.analysis.summary, /Get-ChildItem/u)
+  assert.doesNotMatch(body.analysis.summary, /\*\*/u)
+  assert.doesNotMatch(body.analysis.summary, /`/u)
+  assert.doesNotMatch(body.analysis.summary, /^powershell$/mu)
+})
+
 test('host route rejects non-POST requests', async () => {
   const ctx = createContext()
   const res = new FakeResponse()
